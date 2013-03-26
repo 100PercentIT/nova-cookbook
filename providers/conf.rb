@@ -24,6 +24,22 @@ action :create do
     nova_info = get_access_endpoint("nova-api-os-compute", "nova", "api")
     metadata_ip = nova_info["host"]
   end
+  
+  if ! node["nova"]["novnc"].nil?
+    if ! node["nova"]["novnc"]["base_url"].nil?
+      novncproxy_base_url = node["nova"]["novnc"]["base_url"]
+    end
+  else
+    novncproxy_base_url = novncproxy_endpoint["uri"]
+  end
+  
+  if ! node["nova"]["xvpvnc"].nil?
+    if ! node["nova"]["xvpvnc"]["base_url"].nil?
+      xvpvncproxy_base_url = node["nova"]["xvpvnc"]["base_url"]
+    end
+  else
+    xvpvncproxy_base_url = xvpvncproxy_endpoint["uri"]
+  end
 
   platform_options = node["nova"]["platform"][new_resource.version]
 
@@ -86,12 +102,12 @@ action :create do
       "db_name" => node["nova"]["db"]["name"],
       "vncserver_listen" => novncserver_bind["host"],
       "vncserver_proxyclient_address" => novncserver_bind["host"],
-      "novncproxy_base_url" => novncproxy_endpoint["uri"],
+      "novncproxy_base_url" => novncproxy_base_url,
       "xvpvncproxy_bind_host" => xvpvncproxy_bind["host"],
       "xvpvncproxy_bind_port" => xvpvncproxy_bind["port"],
       "novncproxy_bind_host" => novncproxy_bind["host"],
       "novncproxy_bind_port" => novncproxy_bind["port"],
-      "xvpvncproxy_base_url" => xvpvncproxy_endpoint["uri"],
+      "xvpvncproxy_base_url" => xvpvncproxy_base_url,
       "rabbit_ipaddress" => rabbit_info["host"],
       "rabbit_port" => rabbit_info["port"],
       "keystone_api_ipaddress" => ks_admin_endpoint["host"],
