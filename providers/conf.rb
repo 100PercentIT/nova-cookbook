@@ -28,6 +28,8 @@ action :create do
   if ! node["nova"]["novnc"].nil?
     if ! node["nova"]["novnc"]["base_url"].nil?
       novncproxy_base_url = node["nova"]["novnc"]["base_url"]
+    else
+      novncproxy_base_url = novncproxy_endpoint["uri"]
     end
   else
     novncproxy_base_url = novncproxy_endpoint["uri"]
@@ -36,6 +38,8 @@ action :create do
   if ! node["nova"]["xvpvnc"].nil?
     if ! node["nova"]["xvpvnc"]["base_url"].nil?
       xvpvncproxy_base_url = node["nova"]["xvpvnc"]["base_url"]
+    else
+      xvpvncproxy_base_url = xvpvncproxy_endpoint["uri"]
     end
   else
     xvpvncproxy_base_url = xvpvncproxy_endpoint["uri"]
