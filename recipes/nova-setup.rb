@@ -27,8 +27,14 @@ else
 end
 
 include_recipe "nova::nova-common"
-include_recipe "mysql::client"
-include_recipe "mysql::ruby"
+if node['db']['provider'] == 'mysql'
+  include_recipe "mysql::client"
+  include_recipe "mysql::ruby"
+end
+if node['db']['provider'] == 'postgresql'
+  include_recipe "postgresql::client"
+  include_recipe "postgresql::ruby"
+end
 include_recipe "monitoring"
 
 ks_service_endpoint = get_access_endpoint("keystone-api", "keystone","service-api")
@@ -39,10 +45,18 @@ keystone_admin_tenant = keystone["users"][keystone_admin_user]["default_tenant"]
 
 #creates db and user
 #function defined in osops-utils/libraries
-create_db_and_user("mysql",
-                   node["nova"]["db"]["name"],
-                   node["nova"]["db"]["username"],
-                   node["nova"]["db"]["password"])
+if node['db']['provider'] == 'mysql'
+  create_db_and_user("mysql",
+                     node["nova"]["db"]["name"],
+                     node["nova"]["db"]["username"],
+                     node["nova"]["db"]["password"])
+end
+if node['db']['provider'] == 'postgresql'
+  create_db_and_user("postgresql",
+                     node["nova"]["db"]["name"],
+                     node["nova"]["db"]["username"],
+                     node["nova"]["db"]["password"])
+end
 
 execute "nova-manage db sync" do
   command "nova-manage db sync"

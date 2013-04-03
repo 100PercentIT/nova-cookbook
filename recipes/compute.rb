@@ -45,6 +45,14 @@ nova_compute_packages.each do |pkg|
   end
 end
 
+if node['db']['provider'] == 'postgresql'
+  platform_options["postgresql_python_packages"].each do |pkg|
+    package pkg do
+      action :install
+    end
+  end
+end
+
 template "/etc/nova/nova-compute.conf" do
   source "#{release}/nova-compute.conf.erb"
   owner "nova"

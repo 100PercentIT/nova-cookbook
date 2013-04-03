@@ -2,7 +2,12 @@ action :create do
   log "Creating the nova.conf #{new_resource.version}"
 
   # do all the searches
+if node['db']['provider'] == 'mysql'
   mysql_info = get_access_endpoint("mysql-master", "mysql", "db")
+end
+if node['db']['provider'] == 'postgresql'
+  postgresql_info = get_access_endpoint('postgresql-master', 'postgresql', 'db')
+end
   rabbit_info = get_access_endpoint("rabbitmq-server", "rabbitmq", "queue")
   nova_setup_info = get_settings_by_role("nova-setup", "nova")
   keystone = get_settings_by_role("keystone", "keystone")
@@ -23,26 +28,6 @@ action :create do
     quantum_endpoint = get_access_endpoint("nova-network-controller", "quantum", "api")
     nova_info = get_access_endpoint("nova-api-os-compute", "nova", "api")
     metadata_ip = nova_info["host"]
-  end
-  
-  if ! node["nova"]["novnc"].nil?
-    if ! node["nova"]["novnc"]["base_url"].nil?
-      novncproxy_base_url = node["nova"]["novnc"]["base_url"]
-    else
-      novncproxy_base_url = novncproxy_endpoint["uri"]
-    end
-  else
-    novncproxy_base_url = novncproxy_endpoint["uri"]
-  end
-  
-  if ! node["nova"]["xvpvnc"].nil?
-    if ! node["nova"]["xvpvnc"]["base_url"].nil?
-      xvpvncproxy_base_url = node["nova"]["xvpvnc"]["base_url"]
-    else
-      xvpvncproxy_base_url = xvpvncproxy_endpoint["uri"]
-    end
-  else
-    xvpvncproxy_base_url = xvpvncproxy_endpoint["uri"]
   end
 
   platform_options = node["nova"]["platform"][new_resource.version]
@@ -91,66 +76,131 @@ action :create do
     )
   end
 
-  t = template "/etc/nova/nova.conf" do
-    source "#{new_resource.version}/nova.conf.erb"
-    owner "nova"
-    group "nova"
-    mode "0600"
-    cookbook "nova"
-    variables(
-      "use_syslog" => node["nova"]["syslog"]["use"],
-      "log_facility" => node["nova"]["syslog"]["facility"],
-      "db_ipaddress" => mysql_info["host"],
-      "user" => node["nova"]["db"]["username"],
-      "passwd" => nova_setup_info["db"]["password"],
-      "db_name" => node["nova"]["db"]["name"],
-      "vncserver_listen" => novncserver_bind["host"],
-      "vncserver_proxyclient_address" => novncserver_bind["host"],
-      "novncproxy_base_url" => novncproxy_base_url,
-      "xvpvncproxy_bind_host" => xvpvncproxy_bind["host"],
-      "xvpvncproxy_bind_port" => xvpvncproxy_bind["port"],
-      "novncproxy_bind_host" => novncproxy_bind["host"],
-      "novncproxy_bind_port" => novncproxy_bind["port"],
-      "xvpvncproxy_base_url" => xvpvncproxy_base_url,
-      "rabbit_ipaddress" => rabbit_info["host"],
-      "rabbit_port" => rabbit_info["port"],
-      "keystone_api_ipaddress" => ks_admin_endpoint["host"],
-      "keystone_service_port" => ks_service_endpoint["port"],
-      "glance_serverlist" => "#{glance_endpoint["host"]}:#{glance_endpoint["port"]}",
-      "iscsi_helper" => platform_options["iscsi_helper"],
-      "scheduler_driver" => node["nova"]["scheduler"]["scheduler_driver"],
-      "scheduler_default_filters" => platform_options["nova_scheduler_default_filters"].join(","),
-      "scheduler_least_cost_functions" => node["nova"]["scheduler"]["least_cost_functions"],
-      "availability_zone" => node["nova"]["config"]["availability_zone"],
-      "default_schedule_zone" => node["nova"]["config"]["default_schedule_zone"],
-      "virt_type" => node["nova"]["libvirt"]["virt_type"],
-      "remove_unused_base_images" => node["nova"]["libvirt"]["remove_unused_base_images"],
-      "remove_unused_resized_minimum_age_seconds" => node["nova"]["libvirt"]["remove_unused_resized_minimum_age_seconds"],
-      "remove_unused_original_minimum_age_seconds" => node["nova"]["libvirt"]["remove_unused_original_minimum_age_seconds"],
-      "checksum_base_images" => node["nova"]["libvirt"]["checksum_base_images"],
-      "libvirt_inject_key" => node["nova"]["libvirt"]["libvirt_inject_key"],
-      "force_raw_images" => node["nova"]["config"]["force_raw_images"],
-      "allow_same_net_traffic" => node["nova"]["config"]["allow_same_net_traffic"],
-      "dnsmasq_config_file" => node["nova"]["config"]["dnsmasq_config_file"],
-      "osapi_max_limit" => node["nova"]["config"]["osapi_max_limit"],
-      "cpu_allocation_ratio" => node["nova"]["config"]["cpu_allocation_ratio"],
-      "ram_allocation_ratio" => node["nova"]["config"]["ram_allocation_ratio"],
-      "snapshot_image_format" => node["nova"]["config"]["snapshot_image_format"],
-      "start_guests_on_host_boot" => node["nova"]["config"]["start_guests_on_host_boot"],
-      "resume_guests_state_on_host_boot" => node["nova"]["config"]["resume_guests_state_on_host_boot"],
-      "quota_security_groups" => node["nova"]["config"]["quota_security_groups"],
-      "quota_security_group_rules" => node["nova"]["config"]["quota_security_group_rules"],
-      "use_single_default_gateway" => node["nova"]["config"]["use_single_default_gateway"],
-      "network_options" => network_options,
-      "scheduler_max_attempts" => node["nova"]["config"]["scheduler_max_attempts"],
-      "vpn_image_id" => node["nova"]["config"]["vpn_image_id"],
-      "cinder_catalog_info" => node["nova"]["services"]["volume"]["cinder_catalog_info"],
-      "osapi_compute_listen" => api_bind["host"],
-      "osapi_compute_listen_port" => api_bind["port"],
-      "ec2_listen" => ec2_bind["host"],
-      "ec2_host" => ec2_bind["host"],
-      "ec2_listen_port" => ec2_bind["port"]
-    )
+  if node['db']['provider'] == 'mysql'
+    t = template "/etc/nova/nova.conf" do
+      source "#{new_resource.version}/nova.conf.erb"
+      owner "nova"
+      group "nova"
+      mode "0600"
+      cookbook "nova"
+      variables(
+        "use_syslog" => node["nova"]["syslog"]["use"],
+        "log_facility" => node["nova"]["syslog"]["facility"],
+        "db_ipaddress" => mysql_info["host"],
+        "user" => node["nova"]["db"]["username"],
+        "passwd" => nova_setup_info["db"]["password"],
+        "db_name" => node["nova"]["db"]["name"],
+        "vncserver_listen" => novncserver_bind["host"],
+        "vncserver_proxyclient_address" => novncserver_bind["host"],
+        "novncproxy_base_url" => novncproxy_endpoint["uri"],
+        "xvpvncproxy_bind_host" => xvpvncproxy_bind["host"],
+        "xvpvncproxy_bind_port" => xvpvncproxy_bind["port"],
+        "novncproxy_bind_host" => novncproxy_bind["host"],
+        "novncproxy_bind_port" => novncproxy_bind["port"],
+        "xvpvncproxy_base_url" => xvpvncproxy_endpoint["uri"],
+        "rabbit_ipaddress" => rabbit_info["host"],
+        "rabbit_port" => rabbit_info["port"],
+        "keystone_api_ipaddress" => ks_admin_endpoint["host"],
+        "keystone_service_port" => ks_service_endpoint["port"],
+        "glance_serverlist" => "#{glance_endpoint["host"]}:#{glance_endpoint["port"]}",
+        "iscsi_helper" => platform_options["iscsi_helper"],
+        "scheduler_driver" => node["nova"]["scheduler"]["scheduler_driver"],
+        "scheduler_default_filters" => platform_options["nova_scheduler_default_filters"].join(","),
+        "scheduler_least_cost_functions" => node["nova"]["scheduler"]["least_cost_functions"],
+        "availability_zone" => node["nova"]["config"]["availability_zone"],
+        "default_schedule_zone" => node["nova"]["config"]["default_schedule_zone"],
+        "virt_type" => node["nova"]["libvirt"]["virt_type"],
+        "remove_unused_base_images" => node["nova"]["libvirt"]["remove_unused_base_images"],
+        "remove_unused_resized_minimum_age_seconds" => node["nova"]["libvirt"]["remove_unused_resized_minimum_age_seconds"],
+        "remove_unused_original_minimum_age_seconds" => node["nova"]["libvirt"]["remove_unused_original_minimum_age_seconds"],
+        "checksum_base_images" => node["nova"]["libvirt"]["checksum_base_images"],
+        "libvirt_inject_key" => node["nova"]["libvirt"]["libvirt_inject_key"],
+        "force_raw_images" => node["nova"]["config"]["force_raw_images"],
+        "allow_same_net_traffic" => node["nova"]["config"]["allow_same_net_traffic"],
+        "dnsmasq_config_file" => node["nova"]["config"]["dnsmasq_config_file"],
+        "osapi_max_limit" => node["nova"]["config"]["osapi_max_limit"],
+        "cpu_allocation_ratio" => node["nova"]["config"]["cpu_allocation_ratio"],
+        "ram_allocation_ratio" => node["nova"]["config"]["ram_allocation_ratio"],
+        "snapshot_image_format" => node["nova"]["config"]["snapshot_image_format"],
+        "start_guests_on_host_boot" => node["nova"]["config"]["start_guests_on_host_boot"],
+        "resume_guests_state_on_host_boot" => node["nova"]["config"]["resume_guests_state_on_host_boot"],
+        "quota_security_groups" => node["nova"]["config"]["quota_security_groups"],
+        "quota_security_group_rules" => node["nova"]["config"]["quota_security_group_rules"],
+        "use_single_default_gateway" => node["nova"]["config"]["use_single_default_gateway"],
+        "network_options" => network_options,
+        "scheduler_max_attempts" => node["nova"]["config"]["scheduler_max_attempts"],
+        "vpn_image_id" => node["nova"]["config"]["vpn_image_id"],
+        "cinder_catalog_info" => node["nova"]["services"]["volume"]["cinder_catalog_info"],
+        "osapi_compute_listen" => api_bind["host"],
+        "osapi_compute_listen_port" => api_bind["port"],
+        "ec2_listen" => ec2_bind["host"],
+        "ec2_host" => ec2_bind["host"],
+        "ec2_listen_port" => ec2_bind["port"]
+      )
+    end
+  end
+  if node['db']['provider'] == 'postgresql'
+    t = template "/etc/nova/nova.conf" do
+      source "#{new_resource.version}/nova.postgresql.conf.erb"
+      owner "nova"
+      group "nova"
+      mode "0600"
+      cookbook "nova"
+      variables(
+        "use_syslog" => node["nova"]["syslog"]["use"],
+        "log_facility" => node["nova"]["syslog"]["facility"],
+        "db_ipaddress" => postgresql_info["host"],
+        "user" => node["nova"]["db"]["username"],
+        "passwd" => nova_setup_info["db"]["password"],
+        "db_name" => node["nova"]["db"]["name"],
+        "vncserver_listen" => novncserver_bind["host"],
+        "vncserver_proxyclient_address" => novncserver_bind["host"],
+        "novncproxy_base_url" => novncproxy_endpoint["uri"],
+        "xvpvncproxy_bind_host" => xvpvncproxy_bind["host"],
+        "xvpvncproxy_bind_port" => xvpvncproxy_bind["port"],
+        "novncproxy_bind_host" => novncproxy_bind["host"],
+        "novncproxy_bind_port" => novncproxy_bind["port"],
+        "xvpvncproxy_base_url" => xvpvncproxy_endpoint["uri"],
+        "rabbit_ipaddress" => rabbit_info["host"],
+        "rabbit_port" => rabbit_info["port"],
+        "keystone_api_ipaddress" => ks_admin_endpoint["host"],
+        "keystone_service_port" => ks_service_endpoint["port"],
+        "glance_serverlist" => "#{glance_endpoint["host"]}:#{glance_endpoint["port"]}",
+        "iscsi_helper" => platform_options["iscsi_helper"],
+        "scheduler_driver" => node["nova"]["scheduler"]["scheduler_driver"],
+        "scheduler_default_filters" => platform_options["nova_scheduler_default_filters"].join(","),
+        "scheduler_least_cost_functions" => node["nova"]["scheduler"]["least_cost_functions"],
+        "availability_zone" => node["nova"]["config"]["availability_zone"],
+        "default_schedule_zone" => node["nova"]["config"]["default_schedule_zone"],
+        "virt_type" => node["nova"]["libvirt"]["virt_type"],
+        "remove_unused_base_images" => node["nova"]["libvirt"]["remove_unused_base_images"],
+        "remove_unused_resized_minimum_age_seconds" => node["nova"]["libvirt"]["remove_unused_resized_minimum_age_seconds"],
+        "remove_unused_original_minimum_age_seconds" => node["nova"]["libvirt"]["remove_unused_original_minimum_age_seconds"],
+        "checksum_base_images" => node["nova"]["libvirt"]["checksum_base_images"],
+        "libvirt_inject_key" => node["nova"]["libvirt"]["libvirt_inject_key"],
+        "force_raw_images" => node["nova"]["config"]["force_raw_images"],
+        "allow_same_net_traffic" => node["nova"]["config"]["allow_same_net_traffic"],
+        "dnsmasq_config_file" => node["nova"]["config"]["dnsmasq_config_file"],
+        "osapi_max_limit" => node["nova"]["config"]["osapi_max_limit"],
+        "cpu_allocation_ratio" => node["nova"]["config"]["cpu_allocation_ratio"],
+        "ram_allocation_ratio" => node["nova"]["config"]["ram_allocation_ratio"],
+        "snapshot_image_format" => node["nova"]["config"]["snapshot_image_format"],
+        "start_guests_on_host_boot" => node["nova"]["config"]["start_guests_on_host_boot"],
+        "resume_guests_state_on_host_boot" => node["nova"]["config"]["resume_guests_state_on_host_boot"],
+        "quota_security_groups" => node["nova"]["config"]["quota_security_groups"],
+        "quota_security_group_rules" => node["nova"]["config"]["quota_security_group_rules"],
+        "use_single_default_gateway" => node["nova"]["config"]["use_single_default_gateway"],
+        "network_options" => network_options,
+        "scheduler_max_attempts" => node["nova"]["config"]["scheduler_max_attempts"],
+        "vpn_image_id" => node["nova"]["config"]["vpn_image_id"],
+        "cinder_catalog_info" => node["nova"]["services"]["volume"]["cinder_catalog_info"],
+        "osapi_compute_listen" => api_bind["host"],
+        "osapi_compute_listen_port" => api_bind["port"],
+        "ec2_listen" => ec2_bind["host"],
+        "ec2_host" => ec2_bind["host"],
+        "ec2_listen_port" => ec2_bind["port"]
+      )
+    end
   end
   new_resource.updated_by_last_action(t.updated_by_last_action?)
 end
